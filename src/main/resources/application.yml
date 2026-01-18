@@ -1,0 +1,134 @@
+spring:
+  application:
+    name: user-service
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/user_db}
+    username: ${DATABASE_USERNAME:atulpundir}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      url: ${REDIS_URL:redis://localhost:6379}
+      timeout: 5000ms
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+server:
+  port: ${PORT:3002}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:your-super-secret-jwt-key-min-32-chars}
+
+  subscription-service:
+    api-key: ${SUBSCRIPTION_SERVICE_API_KEY:default-api-key}
+
+  usage:
+    default-monthly-limit: ${DEFAULT_MONTHLY_LIMIT:50}
+    unlimited-plan-limit: ${UNLIMITED_PLAN_LIMIT:-1}
+
+  cors:
+    origin: ${CORS_ORIGIN:*}
+
+# Actuator endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# OpenAPI/Swagger configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  info:
+    title: User Service API
+    description: User management service with subscription tracking
+    version: 1.0.0
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    com.myapp.userservice: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+# Development profile
+spring:
+  config:
+    activate:
+      on-profile: development
+
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    com.myapp.userservice: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+---
+# Production profile
+spring:
+  config:
+    activate:
+      on-profile: production
+
+logging:
+  level:
+    root: WARN
+    com.myapp.userservice: INFO
+    org.springframework.security: WARN
+
+---
+# Test profile
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/user_db_test
+
+  flyway:
+    clean-disabled: false

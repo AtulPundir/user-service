@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/user_db
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-must-be-at-least-32-characters}
+      - SUBSCRIPTION_SERVICE_API_KEY=${SUBSCRIPTION_SERVICE_API_KEY:-default-api-key}
+      - SPRING_PROFILES_ACTIVE=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - user-service-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: user-service-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=user_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - user-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: user-service-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - user-service-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  user-service-network:
+    driver: bridge
