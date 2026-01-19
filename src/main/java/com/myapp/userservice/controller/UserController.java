@@ -1,7 +1,6 @@
 package com.myapp.userservice.controller;
 
 import com.myapp.userservice.domain.UserStatus;
-import com.myapp.userservice.dto.request.CreateUserRequest;
 import com.myapp.userservice.dto.request.UpdateUserRequest;
 import com.myapp.userservice.dto.request.UserFilterRequest;
 import com.myapp.userservice.dto.response.ApiResponse;
@@ -13,7 +12,6 @@ import com.myapp.userservice.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -33,14 +31,6 @@ public class UserController {
         this.userService = userService;
         this.groupService = groupService;
         this.securityUtils = securityUtils;
-    }
-
-    @PostMapping("/create-user")
-    @Operation(summary = "Create a new user")
-    public ResponseEntity<ApiResponse<UserResponse>> createUser(@Valid @RequestBody CreateUserRequest request) {
-        UserResponse user = userService.createUser(request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(user, "User created successfully"));
     }
 
     @GetMapping("/me")

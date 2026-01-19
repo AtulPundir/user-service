@@ -71,4 +71,14 @@ public interface UserGroupRepository extends JpaRepository<UserGroup, String> {
      */
     @Query("SELECT g FROM UserGroup g WHERE LOWER(g.name) = LOWER(:name) AND g.isActive = true")
     List<UserGroup> findByNameIgnoreCaseAndIsActiveTrue(@Param("name") String name);
+
+    /**
+     * Check if an active group with the same name (case insensitive) exists for the same creator.
+     * Used to prevent the same user from creating duplicate group names.
+     */
+    @Query("SELECT CASE WHEN COUNT(g) > 0 THEN true ELSE false END FROM UserGroup g " +
+           "WHERE LOWER(g.name) = LOWER(:name) AND g.createdBy = :createdBy AND g.isActive = true")
+    boolean existsByNameIgnoreCaseAndCreatedByAndIsActiveTrue(
+            @Param("name") String name,
+            @Param("createdBy") String createdBy);
 }

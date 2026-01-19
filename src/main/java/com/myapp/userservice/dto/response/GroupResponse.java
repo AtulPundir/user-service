@@ -16,6 +16,7 @@ public class GroupResponse {
     private GroupResponse parentGroup;
     private List<GroupResponse> childGroups;
     private boolean isActive;
+    private String createdBy;
     private Instant createdAt;
     private Instant updatedAt;
     private List<MembershipResponse> memberships;
@@ -32,6 +33,7 @@ public class GroupResponse {
         response.description = group.getDescription();
         response.parentGroupId = group.getParentGroupId();
         response.isActive = group.isActive();
+        response.createdBy = group.getCreatedBy();
         response.createdAt = group.getCreatedAt();
         response.updatedAt = group.getUpdatedAt();
         return response;
@@ -105,6 +107,14 @@ public class GroupResponse {
 
     public void setActive(boolean active) {
         isActive = active;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
     }
 
     public Instant getCreatedAt() {

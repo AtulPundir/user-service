@@ -7,6 +7,7 @@ import com.myapp.userservice.dto.response.MembershipResponse;
 import com.myapp.userservice.exception.BadRequestException;
 import com.myapp.userservice.exception.ConflictException;
 import com.myapp.userservice.exception.NotFoundException;
+import com.myapp.userservice.repository.GroupInvitationRepository;
 import com.myapp.userservice.repository.UserGroupMembershipRepository;
 import com.myapp.userservice.repository.UserGroupRepository;
 import com.myapp.userservice.repository.UserRepository;
@@ -39,6 +40,9 @@ class GroupServiceTest {
 
     @Mock
     private UserGroupMembershipRepository membershipRepository;
+
+    @Mock
+    private GroupInvitationRepository invitationRepository;
 
     @Mock
     private UserRepository userRepository;

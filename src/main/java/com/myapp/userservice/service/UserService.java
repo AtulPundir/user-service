@@ -197,25 +197,26 @@ public class UserService {
         return userRepository.findById(id).orElse(null);
     }
 
+    /**
+     * @deprecated This method creates shadow users which violates the principle that
+     * users should only be created through the Auth Service. Use the invitation system
+     * instead - when a user doesn't exist, create a GroupInvitation via InvitationService.
+     * This method is kept temporarily for backward compatibility but should not be used.
+     * @see com.myapp.userservice.service.InvitationService
+     */
+    @Deprecated(forRemoval = true)
     @Transactional
     public User createUnverifiedUser(String name, String phone) {
-        String unverifiedId = "unverified_" + phone;
-        String tempEmail = phone + "@temp.unverified";
+        throw new UnsupportedOperationException(
+            "Creating unverified users is no longer supported. " +
+            "Use the invitation system instead. Non-registered users should be invited, " +
+            "and they will be added to groups when they sign up via Auth Service."
+        );
+    }
 
-        User user = new User();
-        user.setId(cuidGenerator.generate());
-        user.setAuthUserId(unverifiedId);
-        user.setName(name);
-        user.setEmail(tempEmail);
-        user.setPhone(phone);
-        user.setVerified(false);
-        user.setStatus(UserStatus.ACTIVE);
-        user.setDefaultMonthlyTaskLimit(DEFAULT_MONTHLY_TASK_LIMIT);
-
-        User savedUser = userRepository.save(user);
-        logger.info("Unverified user created: id={}, phone={}", savedUser.getId(), phone);
-
-        return savedUser;
+    @Transactional(readOnly = true)
+    public User findByEmail(String email) {
+        return userRepository.findByEmail(email).orElse(null);
     }
 
     @Transactional

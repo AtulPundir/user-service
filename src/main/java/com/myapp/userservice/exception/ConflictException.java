@@ -28,6 +28,10 @@ public class ConflictException extends AppException {
         return new ConflictException("Group with this name already exists at this level");
     }
 
+    public static ConflictException groupNameExistsForUser() {
+        return new ConflictException("You have already created a group with this name");
+    }
+
     public static ConflictException userAlreadyInGroup() {
         return new ConflictException("User is already in this group");
     }
@@ -36,5 +40,9 @@ public class ConflictException extends AppException {
         return new ConflictException(
                 String.format("A group with the same name '%s' and identical members already exists (groupId: %s)",
                         existingGroupName, existingGroupId));
+    }
+
+    public static ConflictException invitationAlreadyExists() {
+        return new ConflictException("An invitation for this identifier already exists for this group");
     }
 }

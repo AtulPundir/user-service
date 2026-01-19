@@ -2,12 +2,14 @@ package com.myapp.userservice.service;
 
 import com.myapp.userservice.domain.*;
 import com.myapp.userservice.dto.request.BulkAddUsersRequest;
+import com.myapp.userservice.dto.request.BulkAddUsersToGroupsRequest;
 import com.myapp.userservice.dto.request.CreateGroupWithUsersRequest;
 import com.myapp.userservice.dto.request.UpdateGroupRequest;
 import com.myapp.userservice.dto.response.*;
 import com.myapp.userservice.exception.BadRequestException;
 import com.myapp.userservice.exception.ConflictException;
 import com.myapp.userservice.exception.NotFoundException;
+import com.myapp.userservice.repository.GroupInvitationRepository;
 import com.myapp.userservice.repository.UserGroupMembershipRepository;
 import com.myapp.userservice.repository.UserGroupRepository;
 import com.myapp.userservice.repository.UserRepository;
@@ -20,6 +22,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -30,17 +33,20 @@ public class GroupService {
 
     private final UserGroupRepository groupRepository;
     private final UserGroupMembershipRepository membershipRepository;
+    private final GroupInvitationRepository invitationRepository;
     private final UserRepository userRepository;
     private final UserService userService;
     private final CuidGenerator cuidGenerator;
 
     public GroupService(UserGroupRepository groupRepository,
                        UserGroupMembershipRepository membershipRepository,
+                       GroupInvitationRepository invitationRepository,
                        UserRepository userRepository,
                        UserService userService,
                        CuidGenerator cuidGenerator) {
         this.groupRepository = groupRepository;
         this.membershipRepository = membershipRepository;
+        this.invitationRepository = invitationRepository;
         this.userRepository = userRepository;
         this.userService = userService;
         this.cuidGenerator = cuidGenerator;
@@ -59,8 +65,10 @@ public class GroupService {
             }
         }
 
-        // Note: We allow groups with the same name as long as they have different members.
-        // Duplicate detection (same name + same members) is performed when members are added.
+        // Check if the same user already has an active group with the same name
+        if (groupRepository.existsByNameIgnoreCaseAndCreatedByAndIsActiveTrue(request.getName(), performedBy)) {
+            throw ConflictException.groupNameExistsForUser();
+        }
 
         // Create the group
         UserGroup group = new UserGroup();
@@ -68,6 +76,7 @@ public class GroupService {
         group.setName(request.getName());
         group.setDescription(request.getDescription());
         group.setParentGroup(parentGroup);
+        group.setCreatedBy(performedBy);
         group.setActive(true);
 
         UserGroup savedGroup = groupRepository.save(group);
@@ -268,6 +277,93 @@ public class GroupService {
         return response;
     }
 
+    /**
+     * Add a list of users to multiple existing groups.
+     * Each group is processed independently - failures in one group don't affect others.
+     */
+    @Transactional
+    public BulkAddUsersToGroupsResponse bulkAddUsersToGroups(BulkAddUsersToGroupsRequest request, String performedBy) {
+        BulkAddUsersToGroupsResponse response = new BulkAddUsersToGroupsResponse();
+
+        for (String groupId : request.getGroupIds()) {
+            try {
+                UserGroup group = groupRepository.findById(groupId).orElse(null);
+
+                if (group == null) {
+                    response.addGroupResult(BulkAddUsersToGroupsResponse.GroupResult.failure(
+                            groupId, "Group not found"));
+                    continue;
+                }
+
+                if (!group.isActive()) {
+                    response.addGroupResult(BulkAddUsersToGroupsResponse.GroupResult.failure(
+                            groupId, "Group is not active"));
+                    continue;
+                }
+
+                // Convert request users to BulkAddUsersRequest format
+                BulkAddUsersRequest bulkRequest = new BulkAddUsersRequest();
+                List<BulkAddUsersRequest.UserInfo> userInfoList = new ArrayList<>();
+                for (BulkAddUsersToGroupsRequest.UserInfo userInfo : request.getUsers()) {
+                    BulkAddUsersRequest.UserInfo converted = new BulkAddUsersRequest.UserInfo();
+                    converted.setName(userInfo.getName());
+                    converted.setPhone(userInfo.getPhone());
+                    userInfoList.add(converted);
+                }
+                bulkRequest.setUsers(userInfoList);
+
+                // Use existing bulkAddUsers logic but catch exceptions
+                BulkAddUsersResponse usersResult = bulkAddUsersInternal(group, bulkRequest, performedBy);
+
+                response.addGroupResult(BulkAddUsersToGroupsResponse.GroupResult.success(
+                        groupId, group.getName(), usersResult));
+
+            } catch (ConflictException e) {
+                response.addGroupResult(BulkAddUsersToGroupsResponse.GroupResult.failure(
+                        groupId, e.getMessage()));
+            } catch (Exception e) {
+                logger.error("Error adding users to group {}: {}", groupId, e.getMessage());
+                response.addGroupResult(BulkAddUsersToGroupsResponse.GroupResult.failure(
+                        groupId, "Internal error: " + e.getMessage()));
+            }
+        }
+
+        logger.info("Bulk add users to groups completed: total={}, success={}, failed={}, performedBy={}",
+                response.getTotalGroupsProcessed(), response.getSuccessfulGroups(),
+                response.getFailedGroups(), performedBy);
+
+        return response;
+    }
+
+    /**
+     * Internal method for bulk adding users to a group without duplicate group check.
+     * Used by bulkAddUsersToGroups to avoid redundant validation.
+     */
+    private BulkAddUsersResponse bulkAddUsersInternal(UserGroup group, BulkAddUsersRequest request, String performedBy) {
+        // Get current members and calculate what the new member set will be
+        Set<String> projectedMemberIds = getCurrentMemberIds(group.getId());
+
+        // Collect all user IDs that will be added
+        for (BulkAddUsersRequest.UserInfo userInfo : request.getUsers()) {
+            User user = userService.findByPhone(userInfo.getPhone());
+            if (user != null && user.getStatus() == UserStatus.ACTIVE
+                    && !membershipRepository.isUserInGroup(user.getId(), group.getId())) {
+                projectedMemberIds.add(user.getId());
+            }
+        }
+
+        // Check for duplicate group before adding any members
+        checkForDuplicateGroup(group.getId(), group.getName(), projectedMemberIds);
+
+        BulkAddUsersResponse response = new BulkAddUsersResponse();
+
+        for (BulkAddUsersRequest.UserInfo userInfo : request.getUsers()) {
+            processUserForGroup(group, userInfo.getName(), userInfo.getPhone(), performedBy, response);
+        }
+
+        return response;
+    }
+
     @Transactional(readOnly = true)
     public List<UserResponse> getGroupMembers(String groupId) {
         if (!groupRepository.existsById(groupId)) {
@@ -340,21 +436,29 @@ public class GroupService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Process a user for group membership.
+     * If user exists and is active -> add to group
+     * If user doesn't exist -> create invitation (no shadow user created)
+     */
     private void processUserForGroup(UserGroup group, String name, String phone,
                                     String performedBy, BulkAddUsersResponse response) {
         try {
-            // Find or create user
-            User user = userService.findByPhone(phone);
-            boolean wasCreated = false;
+            // Normalize phone for lookup
+            String normalizedPhone = normalizePhone(phone);
+
+            // Try to find existing user by phone
+            User user = userService.findByPhone(normalizedPhone);
 
             if (user == null) {
-                user = userService.createUnverifiedUser(name, phone);
-                wasCreated = true;
+                // User doesn't exist - create invitation instead of shadow user
+                createInvitationForUser(group, name, normalizedPhone, performedBy, response);
+                return;
             }
 
-            // Check if user is active
+            // User exists - check if active
             if (user.getStatus() != UserStatus.ACTIVE) {
-                response.addAlreadyMember(UserResponse.fromEntity(user), "User is not active");
+                response.addSkippedUser(phone, "User is not active");
                 return;
             }
 
@@ -364,18 +468,61 @@ public class GroupService {
                 return;
             }
 
-            // Add to group
+            // Add existing user to group
             UserGroupMembership membership = createMembership(group, user, GroupMembershipAction.ADDED, performedBy);
-
-            if (wasCreated) {
-                response.addCreatedUser(UserResponse.fromEntity(user), user.isVerified());
-            }
-
             response.addAddedUser(UserResponse.fromEntity(user), MembershipResponse.fromEntity(membership));
 
         } catch (Exception e) {
             logger.warn("Error processing user for group: phone={}, error={}", phone, e.getMessage());
+            response.addSkippedUser(phone, "Error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Create an invitation for a non-existent user.
+     */
+    private void createInvitationForUser(UserGroup group, String name, String phone,
+                                         String performedBy, BulkAddUsersResponse response) {
+        // Check if pending invitation already exists
+        if (invitationRepository.existsPendingInvitation(phone, group.getId(), Instant.now())) {
+            response.addSkippedUser(phone, "Invitation already exists for this group");
+            return;
+        }
+
+        // Create invitation
+        Invitation invitation = new Invitation();
+        invitation.setId(cuidGenerator.generate());
+        invitation.setGroup(group);
+        invitation.setIdentifier(phone);
+        invitation.setIdentifierType(Invitation.IdentifierType.PHONE);
+        invitation.setInviteeName(name);
+        invitation.setStatus(InvitationStatus.PENDING);
+        invitation.setInvitedBy(performedBy);
+
+        Invitation savedInvitation = invitationRepository.save(invitation);
+
+        logger.info("Invitation created for non-existent user: invitationId={}, groupId={}, phone={}, invitedBy={}",
+                savedInvitation.getId(), group.getId(), maskPhone(phone), performedBy);
+
+        InvitationResponse invitationResponse = InvitationResponse.fromEntity(savedInvitation);
+        invitationResponse.setGroupName(group.getName());
+        response.addInvitedUser(invitationResponse);
+    }
+
+    private String normalizePhone(String phone) {
+        // Remove all non-digit characters except + at the start
+        String cleaned = phone.replaceAll("[^\\d+]", "");
+        if (cleaned.startsWith("+")) {
+            return cleaned;
+        }
+        return cleaned;
+    }
+
+    private String maskPhone(String phone) {
+        if (phone == null || phone.length() < 4) {
+            return "***";
+        }
+        return phone.substring(0, 3) + "***" + phone.substring(phone.length() - 2);
     }
 
     private UserGroupMembership createMembership(UserGroup group, User user,

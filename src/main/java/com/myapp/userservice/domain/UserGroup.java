@@ -9,7 +9,8 @@ import java.util.List;
 @Table(name = "user_groups", indexes = {
     @Index(name = "idx_group_parent_group_id", columnList = "parent_group_id"),
     @Index(name = "idx_group_is_active", columnList = "is_active"),
-    @Index(name = "idx_group_name", columnList = "name")
+    @Index(name = "idx_group_name", columnList = "name"),
+    @Index(name = "idx_group_created_by", columnList = "created_by")
 })
 public class UserGroup {
 
@@ -35,6 +36,9 @@ public class UserGroup {
 
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
+
+    @Column(name = "created_by", length = 30)
+    private String createdBy;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -111,6 +115,14 @@ public class UserGroup {
 
     public void setActive(boolean active) {
         isActive = active;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
     }
 
     public Instant getCreatedAt() {

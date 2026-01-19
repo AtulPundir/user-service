@@ -4,6 +4,7 @@ import com.myapp.userservice.dto.request.*;
 import com.myapp.userservice.dto.response.*;
 import com.myapp.userservice.security.SecurityUtils;
 import com.myapp.userservice.service.GroupService;
+import com.myapp.userservice.service.InvitationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,10 +20,12 @@ import java.util.List;
 public class GroupController {
 
     private final GroupService groupService;
+    private final InvitationService invitationService;
     private final SecurityUtils securityUtils;
 
-    public GroupController(GroupService groupService, SecurityUtils securityUtils) {
+    public GroupController(GroupService groupService, InvitationService invitationService, SecurityUtils securityUtils) {
         this.groupService = groupService;
+        this.invitationService = invitationService;
         this.securityUtils = securityUtils;
     }
 
@@ -115,5 +118,37 @@ public class GroupController {
             @RequestParam(required = false) String userId) {
         List<MembershipResponse> history = groupService.getGroupHistory(id, userId);
         return ResponseEntity.ok(ApiResponse.success(history));
+    }
+
+    @PostMapping("/bulk-add-users")
+    @Operation(summary = "Add list of users to multiple existing groups")
+    public ResponseEntity<ApiResponse<BulkAddUsersToGroupsResponse>> bulkAddUsersToGroups(
+            @Valid @RequestBody BulkAddUsersToGroupsRequest request) {
+        String performedBy = securityUtils.getCurrentUserId();
+        BulkAddUsersToGroupsResponse result = groupService.bulkAddUsersToGroups(request, performedBy);
+        return ResponseEntity.ok(ApiResponse.success(result, "Bulk add users to groups completed"));
+    }
+
+    @GetMapping("/{id}/invitations")
+    @Operation(summary = "Get all invitations for a group")
+    public ResponseEntity<ApiResponse<List<InvitationResponse>>> getGroupInvitations(@PathVariable String id) {
+        List<InvitationResponse> invitations = invitationService.getGroupInvitations(id);
+        return ResponseEntity.ok(ApiResponse.success(invitations));
+    }
+
+    @GetMapping("/{id}/invitations/pending")
+    @Operation(summary = "Get pending invitations for a group")
+    public ResponseEntity<ApiResponse<List<InvitationResponse>>> getPendingGroupInvitations(@PathVariable String id) {
+        List<InvitationResponse> invitations = invitationService.getPendingGroupInvitations(id);
+        return ResponseEntity.ok(ApiResponse.success(invitations));
+    }
+
+    @DeleteMapping("/{id}/invitations/{invitationId}")
+    @Operation(summary = "Cancel a pending invitation")
+    public ResponseEntity<ApiResponse<InvitationResponse>> cancelInvitation(
+            @PathVariable String id,
+            @PathVariable String invitationId) {
+        InvitationResponse invitation = invitationService.cancelInvitation(invitationId);
+        return ResponseEntity.ok(ApiResponse.success(invitation, "Invitation cancelled"));
     }
 }

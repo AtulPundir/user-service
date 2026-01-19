@@ -8,6 +8,7 @@ public class BulkAddUsersResponse {
     private int added;
     private int alreadyMembers;
     private int created;
+    private int invited;
     private Details details;
 
     public BulkAddUsersResponse() {
@@ -38,6 +39,14 @@ public class BulkAddUsersResponse {
         this.created = created;
     }
 
+    public int getInvited() {
+        return invited;
+    }
+
+    public void setInvited(int invited) {
+        this.invited = invited;
+    }
+
     public Details getDetails() {
         return details;
     }
@@ -61,10 +70,21 @@ public class BulkAddUsersResponse {
         this.details.created.add(new CreatedDetail(user, isVerified));
     }
 
+    public void addInvitedUser(InvitationResponse invitation) {
+        this.invited++;
+        this.details.invited.add(new InvitedDetail(invitation));
+    }
+
+    public void addSkippedUser(String identifier, String reason) {
+        this.details.skipped.add(new SkippedDetail(identifier, reason));
+    }
+
     public static class Details {
         private List<AddedDetail> added = new ArrayList<>();
         private List<AlreadyMemberDetail> alreadyMembers = new ArrayList<>();
         private List<CreatedDetail> created = new ArrayList<>();
+        private List<InvitedDetail> invited = new ArrayList<>();
+        private List<SkippedDetail> skipped = new ArrayList<>();
 
         public List<AddedDetail> getAdded() {
             return added;
@@ -88,6 +108,22 @@ public class BulkAddUsersResponse {
 
         public void setCreated(List<CreatedDetail> created) {
             this.created = created;
+        }
+
+        public List<InvitedDetail> getInvited() {
+            return invited;
+        }
+
+        public void setInvited(List<InvitedDetail> invited) {
+            this.invited = invited;
+        }
+
+        public List<SkippedDetail> getSkipped() {
+            return skipped;
+        }
+
+        public void setSkipped(List<SkippedDetail> skipped) {
+            this.skipped = skipped;
         }
     }
 
@@ -175,6 +211,64 @@ public class BulkAddUsersResponse {
 
         public void setVerified(boolean verified) {
             isVerified = verified;
+        }
+    }
+
+    public static class InvitedDetail {
+        private InvitationResponse invitation;
+        private String message;
+
+        public InvitedDetail() {
+        }
+
+        public InvitedDetail(InvitationResponse invitation) {
+            this.invitation = invitation;
+            this.message = "User will be added to the group after signup";
+        }
+
+        public InvitationResponse getInvitation() {
+            return invitation;
+        }
+
+        public void setInvitation(InvitationResponse invitation) {
+            this.invitation = invitation;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public void setMessage(String message) {
+            this.message = message;
+        }
+    }
+
+    public static class SkippedDetail {
+        private String identifier;
+        private String reason;
+
+        public SkippedDetail() {
+        }
+
+        public SkippedDetail(String identifier, String reason) {
+            this.identifier = identifier;
+            this.reason = reason;
+        }
+
+        public String getIdentifier() {
+            return identifier;
+        }
+
+        public void setIdentifier(String identifier) {
+            this.identifier = identifier;
+        }
+
+        public String getReason() {
+            return reason;
+        }
+
+        public void setReason(String reason) {
+            this.reason = reason;
         }
     }
 }
