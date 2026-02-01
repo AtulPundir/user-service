@@ -1,6 +1,6 @@
 spring:
   application:
-    name: user-service
+    name: identity-service
 
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/user_db}
@@ -34,6 +34,9 @@ spring:
       url: ${REDIS_URL:redis://localhost:6379}
       timeout: 5000ms
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -52,9 +55,32 @@ app:
   subscription-service:
     api-key: ${SUBSCRIPTION_SERVICE_API_KEY:default-api-key}
 
+  wow-service:
+    base-url: ${WOW_SERVICE_URL:http://localhost:3001}
+    api-key: ${WOW_SERVICE_API_KEY:default-api-key}
+
+  internal:
+    api-key: ${INTERNAL_API_KEY:default-api-key}
+
+  events:
+    transport: ${EVENTS_TRANSPORT:http}  # http (default) or kafka
+
+  invitation:
+    expiry-days: ${INVITATION_EXPIRY_DAYS:30}
+
   usage:
     default-monthly-limit: ${DEFAULT_MONTHLY_LIMIT:50}
     unlimited-plan-limit: ${UNLIMITED_PLAN_LIMIT:-1}
+
+  outbox:
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:5000}
+    batch-size: ${OUTBOX_BATCH_SIZE:50}
+    circuit-breaker:
+      failure-threshold: ${OUTBOX_CB_FAILURE_THRESHOLD:5}
+      cooldown-seconds: ${OUTBOX_CB_COOLDOWN_SECONDS:60}
+    cleanup:
+      cron: ${OUTBOX_CLEANUP_CRON:0 30 3 * * *}
+      retention-days: ${OUTBOX_CLEANUP_RETENTION_DAYS:30}
 
   cors:
     origin: ${CORS_ORIGIN:*}
@@ -85,7 +111,7 @@ springdoc:
 logging:
   level:
     root: INFO
-    com.myapp.userservice: DEBUG
+    com.myapp.identityservice: DEBUG
     org.springframework.security: INFO
     org.hibernate.SQL: WARN
   pattern:
@@ -103,7 +129,7 @@ spring:
 
 logging:
   level:
-    com.myapp.userservice: DEBUG
+    com.myapp.identityservice: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
@@ -117,7 +143,7 @@ spring:
 logging:
   level:
     root: WARN
-    com.myapp.userservice: INFO
+    com.myapp.identityservice: INFO
     org.springframework.security: WARN
 
 ---

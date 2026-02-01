@@ -26,6 +26,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
+    // Kafka
+    implementation("org.springframework.kafka:spring-kafka")
+
     // Database
     implementation("org.postgresql:postgresql")
     implementation("org.flywaydb:flyway-core")
@@ -61,5 +64,5 @@ tasks.withType<Test> {
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
-    archiveFileName.set("user-service.jar")
+    archiveFileName.set("identity-service.jar")
 }

@@ -26,7 +26,7 @@ RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
 # Copy the built jar
-COPY --from=builder /app/build/libs/user-service.jar app.jar
+COPY --from=builder /app/build/libs/identity-service.jar app.jar
 
 # Set ownership
 RUN chown -R appuser:appgroup /app

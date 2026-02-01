@@ -24,4 +24,4 @@ app:
 logging:
   level:
     root: WARN
-    com.myapp.userservice: DEBUG
+    com.myapp.identityservice: DEBUG
