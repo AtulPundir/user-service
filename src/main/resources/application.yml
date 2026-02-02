@@ -50,7 +50,7 @@ server:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:your-super-secret-jwt-key-min-32-chars}
+    secret: ${JWT_SECRET:your-super-secret-256-bit-key-change-this-in-production}
 
   subscription-service:
     api-key: ${SUBSCRIPTION_SERVICE_API_KEY:default-api-key}
