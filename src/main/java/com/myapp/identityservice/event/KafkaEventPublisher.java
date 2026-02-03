@@ -19,6 +19,7 @@ public class KafkaEventPublisher implements EventPublisher {
     public static final String TOPIC_INVITATION_ACCEPTED = "identity.invitation-accepted";
     public static final String TOPIC_USER_NAME_UPDATED = "identity.user-name-updated";
     public static final String TOPIC_PENDING_USER_ACTION = "identity.pending-user-action";
+    public static final String TOPIC_USER_ID_MIGRATED = "identity.user-id-migrated";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -108,6 +109,30 @@ public class KafkaEventPublisher implements EventPublisher {
                     });
         } catch (JsonProcessingException e) {
             logger.error("Failed to serialize PENDING_USER_ACTION event: {}", e.getMessage());
+        }
+    }
+
+    @Override
+    public void publishUserIdMigrated(String oldUserId, String newUserId) {
+        Map<String, String> payload = Map.of(
+                "oldUserId", oldUserId,
+                "newUserId", newUserId
+        );
+
+        try {
+            String json = objectMapper.writeValueAsString(payload);
+            kafkaTemplate.send(TOPIC_USER_ID_MIGRATED, oldUserId, json)
+                    .whenComplete((result, ex) -> {
+                        if (ex != null) {
+                            logger.error("Failed to publish USER_ID_MIGRATED to Kafka: oldUserId={}, error={}",
+                                    oldUserId, ex.getMessage());
+                        } else {
+                            logger.info("Published USER_ID_MIGRATED to Kafka: oldUserId={}, newUserId={}",
+                                    oldUserId, newUserId);
+                        }
+                    });
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to serialize USER_ID_MIGRATED event: {}", e.getMessage());
         }
     }
 }

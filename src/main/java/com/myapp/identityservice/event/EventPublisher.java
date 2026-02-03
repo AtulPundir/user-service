@@ -36,4 +36,13 @@ public interface EventPublisher {
      */
     void publishPendingUserAction(String invitationId, String targetUserId,
                                     String contextType, String contextId);
+
+    /**
+     * Publish a user-id migration event when a placeholder user is linked to a real auth user.
+     * wow-service uses this to update all records referencing the old placeholder userId.
+     *
+     * @param oldUserId  the placeholder user's internal id (identity-service PK)
+     * @param newUserId  the auth-service userId now linked to this user
+     */
+    void publishUserIdMigrated(String oldUserId, String newUserId);
 }

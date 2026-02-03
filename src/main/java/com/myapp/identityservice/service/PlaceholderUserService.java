@@ -48,8 +48,10 @@ public class PlaceholderUserService {
                 contactAliasService.setAliasInternal(requestingUserId, existing.getId(), request.getAliasName());
             }
 
+            // Return authUserId for linked users so downstream services (wow-service)
+            // store the same userId that appears in the JWT token
             return new ResolveOrCreateUserResponse(
-                    existing.getId(),
+                    effectiveUserId(existing),
                     existing.isVerified(),
                     false
             );
@@ -76,7 +78,7 @@ public class PlaceholderUserService {
             }
 
             return new ResolveOrCreateUserResponse(
-                    legacyUser.getId(),
+                    effectiveUserId(legacyUser),
                     legacyUser.isVerified(),
                     false
             );
@@ -118,8 +120,16 @@ public class PlaceholderUserService {
                 contactAliasService.setAliasInternal(requestingUserId, raceWinner.getId(), request.getAliasName());
             }
 
-            return new ResolveOrCreateUserResponse(raceWinner.getId(), raceWinner.isVerified(), false);
+            return new ResolveOrCreateUserResponse(effectiveUserId(raceWinner), raceWinner.isVerified(), false);
         }
+    }
+
+    /**
+     * Return authUserId for verified/linked users (matches JWT userId claim),
+     * fall back to internal id for unlinked placeholders.
+     */
+    private String effectiveUserId(User user) {
+        return user.getAuthUserId() != null ? user.getAuthUserId() : user.getId();
     }
 
     private String maskKey(String key) {

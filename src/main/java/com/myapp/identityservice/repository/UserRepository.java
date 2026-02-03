@@ -52,4 +52,17 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM User u WHERE u.email = :email AND u.id <> :id")
     boolean existsByEmailAndIdNot(@Param("email") String email, @Param("id") String id);
+
+    // Invariant check queries
+    @Query("SELECT COUNT(u) FROM User u WHERE u.isVerified = true AND u.authUserId IS NULL")
+    long countVerifiedWithoutAuthUserId();
+
+    @Query("SELECT COUNT(u) FROM User u WHERE u.isVerified = true AND u.identityKey IS NULL")
+    long countVerifiedWithoutIdentityKey();
+
+    @Query(value = "SELECT COUNT(*) FROM (SELECT auth_user_id FROM users WHERE auth_user_id IS NOT NULL GROUP BY auth_user_id HAVING COUNT(*) > 1) sub", nativeQuery = true)
+    long countDuplicateAuthUserIds();
+
+    @Query("SELECT u FROM User u WHERE u.isVerified = true AND u.authUserId IS NULL")
+    List<User> findVerifiedWithoutAuthUserId();
 }

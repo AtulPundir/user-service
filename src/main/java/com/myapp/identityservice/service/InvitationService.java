@@ -12,6 +12,7 @@ import com.myapp.identityservice.repository.GroupInvitationRepository;
 import com.myapp.identityservice.repository.UserGroupMembershipRepository;
 import com.myapp.identityservice.repository.UserGroupRepository;
 import com.myapp.identityservice.repository.UserRepository;
+import com.myapp.identityservice.event.EventPublisher;
 import com.myapp.identityservice.util.CuidGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,19 +39,25 @@ public class InvitationService {
     private final UserGroupMembershipRepository membershipRepository;
     private final CuidGenerator cuidGenerator;
     private final ContextInvitationService contextInvitationService;
+    private final EventPublisher eventPublisher;
+    private final com.myapp.identityservice.client.WowServiceClient wowServiceClient;
 
     public InvitationService(GroupInvitationRepository invitationRepository,
                             UserRepository userRepository,
                             UserGroupRepository groupRepository,
                             UserGroupMembershipRepository membershipRepository,
                             CuidGenerator cuidGenerator,
-                            ContextInvitationService contextInvitationService) {
+                            ContextInvitationService contextInvitationService,
+                            EventPublisher eventPublisher,
+                            com.myapp.identityservice.client.WowServiceClient wowServiceClient) {
         this.invitationRepository = invitationRepository;
         this.userRepository = userRepository;
         this.groupRepository = groupRepository;
         this.membershipRepository = membershipRepository;
         this.cuidGenerator = cuidGenerator;
         this.contextInvitationService = contextInvitationService;
+        this.eventPublisher = eventPublisher;
+        this.wowServiceClient = wowServiceClient;
     }
 
     /**
@@ -120,16 +127,38 @@ public class InvitationService {
         User user;
 
         if (existingUser != null) {
-            // User already exists - this is a retry, just use existing user
+            // User already exists - this is a repeat login, ensure invariants hold
             user = existingUser;
+            boolean needsSave = false;
+
             // Backfill identity fields if missing
             if (user.getIdentityKey() == null) {
                 String identityKey = normalizedPhone != null ? normalizedPhone : normalizedEmail;
                 user.setIdentityKey(identityKey);
                 user.setIdentityType(normalizedPhone != null ? IdentityType.PHONE : IdentityType.EMAIL);
+                needsSave = true;
+            }
+
+            // Enforce verified invariant: OTP login = identity proven = verified
+            if (!user.isVerified()) {
+                user.setVerified(true);
+                needsSave = true;
+            }
+
+            // Backfill phone/email if missing
+            if (normalizedPhone != null && user.getPhone() == null) {
+                user.setPhone(normalizedPhone);
+                needsSave = true;
+            }
+            if (normalizedEmail != null && user.getEmail() == null) {
+                user.setEmail(normalizedEmail);
+                needsSave = true;
+            }
+
+            if (needsSave) {
                 user = userRepository.save(user);
             }
-            logger.info("Onboarding: User already exists, using existing: authUserId={}", request.getAuthUserId());
+            logger.info("Onboarding: User already exists, invariants enforced: authUserId={}", request.getAuthUserId());
         } else {
             // Check if a placeholder user exists for this phone or email
             String identityKey = normalizedPhone != null ? normalizedPhone : normalizedEmail;
@@ -148,6 +177,10 @@ public class InvitationService {
                 userCreated = false;
                 logger.info("Onboarding: Linked placeholder user {} to authUserId={}",
                         user.getId(), request.getAuthUserId());
+                // Migrate wow-service records from placeholder id to auth id
+                if (!user.getId().equals(request.getAuthUserId())) {
+                    migrateUserIdInWowService(user.getId(), request.getAuthUserId());
+                }
             } else {
                 // Check legacy phone/email columns for placeholder users
                 // (placeholder may exist with phone/email set but different identityKey)
@@ -173,6 +206,10 @@ public class InvitationService {
                     userCreated = false;
                     logger.info("Onboarding: Linked legacy placeholder user {} to authUserId={}",
                             user.getId(), request.getAuthUserId());
+                    // Migrate wow-service records from placeholder id to auth id
+                    if (!user.getId().equals(request.getAuthUserId())) {
+                        migrateUserIdInWowService(user.getId(), request.getAuthUserId());
+                    }
                 } else if (legacyPlaceholder != null) {
                     // A verified user already exists with this phone/email
                     if (normalizedPhone != null && legacyPlaceholder.getPhone() != null
@@ -369,10 +406,12 @@ public class InvitationService {
     }
 
     private String normalizeEmail(String email) {
+        if (email == null || email.isBlank()) return null;
         return email.toLowerCase().trim();
     }
 
     private String normalizePhone(String phone) {
+        if (phone == null || phone.isBlank()) return null;
         // Remove all non-digit characters except + at the start
         String cleaned = phone.replaceAll("[^\\d+]", "");
         if (cleaned.startsWith("+")) {
@@ -380,6 +419,27 @@ public class InvitationService {
         }
         // If no country code, assume it's already in standard format
         return cleaned;
+    }
+
+    /**
+     * Migrate userId in wow-service: synchronous call (immediate) + outbox event (reliable fallback).
+     * The sync call ensures the user can access their data immediately after login.
+     * The outbox event ensures delivery even if wow-service is temporarily down.
+     */
+    private void migrateUserIdInWowService(String oldUserId, String newUserId) {
+        // 1. Outbox event — guaranteed delivery via poller retry
+        eventPublisher.publishUserIdMigrated(oldUserId, newUserId);
+
+        // 2. Synchronous call — immediate migration so user can access data right after login
+        try {
+            wowServiceClient.notifyUserIdMigrated(oldUserId, newUserId,
+                    "UID_MIG:" + oldUserId + ":" + newUserId);
+            logger.info("Synchronous userId migration delivered: {} -> {}", oldUserId, newUserId);
+        } catch (Exception e) {
+            // Not fatal — the outbox event will deliver it via poller retry
+            logger.warn("Synchronous userId migration failed (outbox will retry): {} -> {}, error={}",
+                    oldUserId, newUserId, e.getMessage());
+        }
     }
 
     private String maskIdentifier(String identifier) {

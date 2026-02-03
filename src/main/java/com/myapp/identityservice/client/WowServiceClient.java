@@ -56,6 +56,24 @@ public class WowServiceClient {
                 contextType, contextId, targetUserId);
     }
 
+    public void notifyUserIdMigrated(String oldUserId, String newUserId, String eventId) {
+        Map<String, String> body = new HashMap<>();
+        body.put("oldUserId", oldUserId);
+        body.put("newUserId", newUserId);
+        if (eventId != null) {
+            body.put("eventId", eventId);
+        }
+
+        restClient.post()
+                .uri("/internal/events/user-id-migrated")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+
+        logger.info("Delivered to wow-service: USER_ID_MIGRATED oldUserId={}, newUserId={}", oldUserId, newUserId);
+    }
+
     public void notifyUserNameUpdated(String userId, String newDisplayName, String eventId) {
         Map<String, String> body = new HashMap<>();
         body.put("userId", userId);

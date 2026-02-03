@@ -86,6 +86,18 @@ public class OutboxEventPublisher implements EventPublisher {
         saveOutboundEvent("PENDING_USER_ACTION", eventId, payload);
     }
 
+    @Override
+    public void publishUserIdMigrated(String oldUserId, String newUserId) {
+        Map<String, String> payload = Map.of(
+                "oldUserId", oldUserId,
+                "newUserId", newUserId
+        );
+
+        // Deterministic — one migration per placeholder linkage
+        String eventId = "UID_MIG:" + oldUserId + ":" + newUserId;
+        saveOutboundEvent("USER_ID_MIGRATED", eventId, payload);
+    }
+
     private void saveOutboundEvent(String eventType, String eventId, Map<String, String> payload) {
         try {
             OutboundEvent event = new OutboundEvent();

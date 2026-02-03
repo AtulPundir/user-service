@@ -157,6 +157,11 @@ public class OutboxEventPoller {
                     payload.get("newDisplayName"),
                     event.getEventId()
             );
+            case "USER_ID_MIGRATED" -> wowServiceClient.notifyUserIdMigrated(
+                    payload.get("oldUserId"),
+                    payload.get("newUserId"),
+                    event.getEventId()
+            );
             case "PENDING_USER_ACTION" -> {
                 // Notification event — no downstream consumer yet.
                 // Marked as delivered immediately. When a notification-service is
