@@ -59,6 +59,9 @@ app:
     base-url: ${WOW_SERVICE_URL:http://localhost:3001}
     api-key: ${WOW_SERVICE_API_KEY:default-api-key}
 
+  auth-service:
+    base-url: ${AUTH_SERVICE_URL:http://localhost:3000}
+
   internal:
     api-key: ${INTERNAL_API_KEY:default-api-key}
 

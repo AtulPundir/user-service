@@ -1,12 +1,12 @@
 package com.myapp.identityservice.service;
 
+import com.myapp.identityservice.client.AuthServiceClient;
 import com.myapp.identityservice.domain.IdentityType;
 import com.myapp.identityservice.domain.User;
 import com.myapp.identityservice.domain.UserStatus;
 import com.myapp.identityservice.dto.request.ResolveOrCreateUserRequest;
 import com.myapp.identityservice.dto.response.ResolveOrCreateUserResponse;
 import com.myapp.identityservice.repository.UserRepository;
-import com.myapp.identityservice.util.CuidGenerator;
 import com.myapp.identityservice.util.IdentifierNormalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,24 +14,34 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Service for resolving or creating placeholder users.
+ *
+ * NEW ARCHITECTURE: Auth-service is the single source of truth for user IDs.
+ * When a contact is added:
+ * 1. Call auth-service to resolve/create user → get userId
+ * 2. Create/update user in user_db with SAME userId
+ *
+ * This ensures auth_db.users.id == user_db.users.id for all users.
+ */
 @Service
 public class PlaceholderUserService {
 
     private static final Logger logger = LoggerFactory.getLogger(PlaceholderUserService.class);
 
     private final UserRepository userRepository;
-    private final CuidGenerator cuidGenerator;
     private final IdentifierNormalizer identifierNormalizer;
     private final ContactAliasService contactAliasService;
+    private final AuthServiceClient authServiceClient;
 
     public PlaceholderUserService(UserRepository userRepository,
-                                   CuidGenerator cuidGenerator,
                                    IdentifierNormalizer identifierNormalizer,
-                                   ContactAliasService contactAliasService) {
+                                   ContactAliasService contactAliasService,
+                                   AuthServiceClient authServiceClient) {
         this.userRepository = userRepository;
-        this.cuidGenerator = cuidGenerator;
         this.identifierNormalizer = identifierNormalizer;
         this.contactAliasService = contactAliasService;
+        this.authServiceClient = authServiceClient;
     }
 
     @Transactional
@@ -39,101 +49,132 @@ public class PlaceholderUserService {
         String normalizedKey = identifierNormalizer.normalize(
                 request.getIdentityKey(), request.getIdentityType());
 
-        // Check if user exists by identity_key
-        User existing = userRepository.findByIdentityKey(normalizedKey).orElse(null);
+        // Step 1: Call auth-service to resolve or create user
+        // This ensures auth-service owns the user ID
+        AuthServiceClient.ResolveOrCreateResponse authResponse = authServiceClient.resolveOrCreateUser(
+                normalizedKey,
+                request.getIdentityType().name(),
+                request.getAliasName()
+        );
 
-        if (existing != null) {
-            // Save alias if provided
-            if (request.getAliasName() != null && requestingUserId != null) {
-                contactAliasService.setAliasInternal(requestingUserId, existing.getId(), request.getAliasName());
-            }
+        String userId = authResponse.userId();
 
-            // Return authUserId for linked users so downstream services (wow-service)
-            // store the same userId that appears in the JWT token
-            return new ResolveOrCreateUserResponse(
-                    effectiveUserId(existing),
-                    existing.isVerified(),
-                    false
-            );
-        }
+        logger.info("Auth-service resolved user: userId={}, isVerified={}, isNew={}",
+                userId, authResponse.isVerified(), authResponse.isNew());
 
-        // Also check legacy columns for backward compat
-        User legacyUser = null;
-        if (request.getIdentityType() == IdentityType.PHONE) {
-            legacyUser = userRepository.findByPhone(normalizedKey).orElse(null);
+        // Step 2: Ensure user exists in user_db with the SAME ID from auth-service
+        User user = userRepository.findById(userId).orElse(null);
+
+        if (user == null) {
+            // User doesn't exist in user_db yet — create with same ID as auth-service
+            user = createUserWithAuthId(userId, normalizedKey, request.getIdentityType(),
+                    authResponse.isVerified(), authResponse.name());
         } else {
-            legacyUser = userRepository.findByEmail(normalizedKey).orElse(null);
+            // User exists — ensure data is in sync
+            boolean needsSave = false;
+
+            if (user.getIdentityKey() == null) {
+                user.setIdentityKey(normalizedKey);
+                user.setIdentityType(request.getIdentityType());
+                needsSave = true;
+            }
+
+            // Sync verified status from auth-service (source of truth)
+            if (authResponse.isVerified() && !user.isVerified()) {
+                user.setVerified(true);
+                needsSave = true;
+            }
+
+            // Ensure authUserId is set (should be same as id now)
+            if (user.getAuthUserId() == null) {
+                user.setAuthUserId(userId);
+                needsSave = true;
+            }
+
+            if (needsSave) {
+                user = userRepository.save(user);
+            }
         }
 
-        if (legacyUser != null) {
-            // Backfill identity_key on existing user
-            if (legacyUser.getIdentityKey() == null) {
-                legacyUser.setIdentityKey(normalizedKey);
-                legacyUser.setIdentityType(request.getIdentityType());
-                userRepository.save(legacyUser);
-            }
-
-            if (request.getAliasName() != null && requestingUserId != null) {
-                contactAliasService.setAliasInternal(requestingUserId, legacyUser.getId(), request.getAliasName());
-            }
-
-            return new ResolveOrCreateUserResponse(
-                    effectiveUserId(legacyUser),
-                    legacyUser.isVerified(),
-                    false
-            );
+        // Step 3: Save alias if provided
+        if (request.getAliasName() != null && requestingUserId != null) {
+            contactAliasService.setAliasInternal(requestingUserId, userId, request.getAliasName());
         }
 
-        // Create placeholder user — handle concurrent insert race via unique constraint
-        try {
-            User placeholder = new User();
-            placeholder.setId(cuidGenerator.generate());
-            placeholder.setIdentityKey(normalizedKey);
-            placeholder.setIdentityType(request.getIdentityType());
-            placeholder.setVerified(false);
-            placeholder.setStatus(UserStatus.ACTIVE);
-            placeholder.setDefaultMonthlyTaskLimit(0);
-
-            if (request.getIdentityType() == IdentityType.PHONE) {
-                placeholder.setPhone(normalizedKey);
-            } else {
-                placeholder.setEmail(normalizedKey);
-            }
-
-            User saved = userRepository.save(placeholder);
-            logger.info("Created placeholder user: id={}, identityKey={}, type={}",
-                    saved.getId(), maskKey(normalizedKey), request.getIdentityType());
-
-            if (request.getAliasName() != null && requestingUserId != null) {
-                contactAliasService.setAliasInternal(requestingUserId, saved.getId(), request.getAliasName());
-            }
-
-            return new ResolveOrCreateUserResponse(saved.getId(), false, true);
-        } catch (DataIntegrityViolationException e) {
-            // Concurrent insert race — another request created the user first, retry lookup
-            logger.info("Concurrent placeholder creation detected for {}, retrying lookup", maskKey(normalizedKey));
-            User raceWinner = userRepository.findByIdentityKey(normalizedKey)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "User not found after constraint violation for key: " + maskKey(normalizedKey)));
-
-            if (request.getAliasName() != null && requestingUserId != null) {
-                contactAliasService.setAliasInternal(requestingUserId, raceWinner.getId(), request.getAliasName());
-            }
-
-            return new ResolveOrCreateUserResponse(effectiveUserId(raceWinner), raceWinner.isVerified(), false);
-        }
+        // Return the userId — same in both auth_db and user_db
+        return new ResolveOrCreateUserResponse(userId, user.isVerified(), authResponse.isNew());
     }
 
     /**
-     * Return authUserId for verified/linked users (matches JWT userId claim),
-     * fall back to internal id for unlinked placeholders.
+     * Create user in user_db with the ID from auth-service.
+     * This ensures auth_db.users.id == user_db.users.id
      */
-    private String effectiveUserId(User user) {
-        return user.getAuthUserId() != null ? user.getAuthUserId() : user.getId();
+    private User createUserWithAuthId(String authUserId, String identityKey, IdentityType identityType,
+                                        boolean isVerified, String name) {
+        try {
+            User user = new User();
+            user.setId(authUserId);           // SAME ID as auth-service
+            user.setAuthUserId(authUserId);   // SAME ID
+            user.setIdentityKey(identityKey);
+            user.setIdentityType(identityType);
+            user.setVerified(isVerified);
+            user.setStatus(UserStatus.ACTIVE);
+            user.setDefaultMonthlyTaskLimit(isVerified ? 50 : 0);
+            user.setName(name);
+
+            if (identityType == IdentityType.PHONE) {
+                user.setPhone(identityKey);
+            } else {
+                user.setEmail(identityKey);
+            }
+
+            User saved = userRepository.save(user);
+            logger.info("Created user in user_db with auth-service ID: id={}, identityKey={}, isVerified={}",
+                    saved.getId(), maskKey(identityKey), isVerified);
+            return saved;
+
+        } catch (DataIntegrityViolationException e) {
+            // Race condition — another request created the user, retry lookup
+            logger.info("Concurrent user creation detected for {}, retrying lookup", maskKey(identityKey));
+            return userRepository.findById(authUserId)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "User not found after constraint violation for id: " + authUserId));
+        }
     }
 
     private String maskKey(String key) {
         if (key == null || key.length() < 4) return "***";
         return key.substring(0, 3) + "***" + key.substring(key.length() - 2);
     }
+
+    // ========================================================================================
+    // DEPRECATED: Old methods that used different IDs across services.
+    // Keeping for reference but no longer used.
+    // ========================================================================================
+
+    /*
+    // OLD: This returned authUserId for linked users, but IDs were different
+    private String effectiveUserId(User user) {
+        return user.getAuthUserId() != null ? user.getAuthUserId() : user.getId();
+    }
+
+    // OLD: This created placeholder with identity-service generated ID
+    private User createPlaceholderWithLocalId(String normalizedKey, IdentityType identityType) {
+        User placeholder = new User();
+        placeholder.setId(cuidGenerator.generate());  // Different from auth-service ID!
+        placeholder.setIdentityKey(normalizedKey);
+        placeholder.setIdentityType(identityType);
+        placeholder.setVerified(false);
+        placeholder.setStatus(UserStatus.ACTIVE);
+        placeholder.setDefaultMonthlyTaskLimit(0);
+
+        if (identityType == IdentityType.PHONE) {
+            placeholder.setPhone(normalizedKey);
+        } else {
+            placeholder.setEmail(normalizedKey);
+        }
+
+        return userRepository.save(placeholder);
+    }
+    */
 }

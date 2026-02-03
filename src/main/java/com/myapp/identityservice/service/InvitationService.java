@@ -177,10 +177,11 @@ public class InvitationService {
                 userCreated = false;
                 logger.info("Onboarding: Linked placeholder user {} to authUserId={}",
                         user.getId(), request.getAuthUserId());
-                // Migrate wow-service records from placeholder id to auth id
-                if (!user.getId().equals(request.getAuthUserId())) {
-                    migrateUserIdInWowService(user.getId(), request.getAuthUserId());
-                }
+                // DEPRECATED: Migration no longer needed - auth-service is now single source of truth for user IDs
+                // New architecture: auth_db.users.id == user_db.users.id for all users
+                // if (!user.getId().equals(request.getAuthUserId())) {
+                //     migrateUserIdInWowService(user.getId(), request.getAuthUserId());
+                // }
             } else {
                 // Check legacy phone/email columns for placeholder users
                 // (placeholder may exist with phone/email set but different identityKey)
@@ -206,10 +207,11 @@ public class InvitationService {
                     userCreated = false;
                     logger.info("Onboarding: Linked legacy placeholder user {} to authUserId={}",
                             user.getId(), request.getAuthUserId());
-                    // Migrate wow-service records from placeholder id to auth id
-                    if (!user.getId().equals(request.getAuthUserId())) {
-                        migrateUserIdInWowService(user.getId(), request.getAuthUserId());
-                    }
+                    // DEPRECATED: Migration no longer needed - auth-service is now single source of truth for user IDs
+                    // New architecture: auth_db.users.id == user_db.users.id for all users
+                    // if (!user.getId().equals(request.getAuthUserId())) {
+                    //     migrateUserIdInWowService(user.getId(), request.getAuthUserId());
+                    // }
                 } else if (legacyPlaceholder != null) {
                     // A verified user already exists with this phone/email
                     if (normalizedPhone != null && legacyPlaceholder.getPhone() != null
@@ -421,11 +423,12 @@ public class InvitationService {
         return cleaned;
     }
 
-    /**
-     * Migrate userId in wow-service: synchronous call (immediate) + outbox event (reliable fallback).
-     * The sync call ensures the user can access their data immediately after login.
-     * The outbox event ensures delivery even if wow-service is temporarily down.
-     */
+    // ========================================================================================
+    // DEPRECATED: Migration logic - kept for reference only.
+    // No longer needed because auth-service is now single source of truth for user IDs.
+    // New architecture: auth_db.users.id == user_db.users.id for all users from creation.
+    // ========================================================================================
+    /*
     private void migrateUserIdInWowService(String oldUserId, String newUserId) {
         // 1. Outbox event — guaranteed delivery via poller retry
         eventPublisher.publishUserIdMigrated(oldUserId, newUserId);
@@ -441,6 +444,7 @@ public class InvitationService {
                     oldUserId, newUserId, e.getMessage());
         }
     }
+    */
 
     private String maskIdentifier(String identifier) {
         if (identifier == null || identifier.length() < 4) {
