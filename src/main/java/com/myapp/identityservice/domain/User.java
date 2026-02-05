@@ -119,7 +119,29 @@ public class User {
     }
 
     public void setPhone(String phone) {
-        this.phone = phone;
+        String normalized = normalizePhone(phone);
+        // Debug logging to trace phone normalization issues
+        if (phone != null && normalized != null && !phone.equals(normalized)) {
+            System.out.println("[User.setPhone] Input: '" + phone + "', Normalized: '" + normalized + "'");
+        }
+        this.phone = normalized;
+    }
+
+    /**
+     * Normalize phone number to +{countrycode}{number} format.
+     * This ensures consistency with auth-service storage format.
+     */
+    private static String normalizePhone(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return null;
+        }
+        // Remove all non-digit characters except +
+        String normalized = phone.replaceAll("[^0-9+]", "");
+        // Ensure + prefix
+        if (!normalized.startsWith("+")) {
+            normalized = "+" + normalized;
+        }
+        return normalized;
     }
 
     public String getIdentityKey() {

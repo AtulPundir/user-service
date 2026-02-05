@@ -92,8 +92,9 @@ public class UserService {
             throw ConflictException.emailExists();
         }
 
-        // Check for duplicate phone
-        if (userRepository.existsByPhone(request.getPhone())) {
+        // Check for duplicate phone (normalize before checking)
+        String normalizedPhone = normalizePhone(request.getPhone());
+        if (normalizedPhone != null && userRepository.existsByPhone(normalizedPhone)) {
             throw ConflictException.phoneExists();
         }
         return effectiveId;
@@ -252,5 +253,19 @@ public class UserService {
             return email.substring(0, 1) + "***" + email.substring(atIndex);
         }
         return email.substring(0, 2) + "***" + email.substring(atIndex);
+    }
+
+    /**
+     * Normalize phone number to +{countrycode}{number} format.
+     */
+    private String normalizePhone(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return null;
+        }
+        String normalized = phone.replaceAll("[^0-9+]", "");
+        if (!normalized.startsWith("+")) {
+            normalized = "+" + normalized;
+        }
+        return normalized;
     }
 }

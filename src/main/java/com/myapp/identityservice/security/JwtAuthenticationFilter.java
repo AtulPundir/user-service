@@ -47,8 +47,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // Check for API key authentication for webhook endpoints
-        if (isWebhookEndpoint(path)) {
+        // Skip JWT for endpoints that use API key authentication
+        if (isApiKeyEndpoint(path)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -98,8 +98,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                path.equals("/");
     }
 
-    private boolean isWebhookEndpoint(String path) {
-        return path.startsWith("/webhooks");
+    private boolean isApiKeyEndpoint(String path) {
+        return path.startsWith("/webhooks") || path.startsWith("/internal/");
     }
 
     private void sendErrorResponse(HttpServletResponse response, int status, String message) throws IOException {

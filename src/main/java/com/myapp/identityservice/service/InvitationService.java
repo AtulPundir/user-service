@@ -120,6 +120,8 @@ public class InvitationService {
         String normalizedEmail = normalizeEmail(request.getEmail());
         String normalizedPhone = normalizePhone(request.getPhone());
 
+        logger.info("Onboarding: Received phone='{}', normalized='{}'", request.getPhone(), normalizedPhone);
+
         // Check if user already exists (idempotency)
         User existingUser = userRepository.findByAuthUserId(request.getAuthUserId()).orElse(null);
 

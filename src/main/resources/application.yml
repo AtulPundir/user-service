@@ -13,6 +13,9 @@ spring:
       idle-timeout: 300000
       connection-timeout: 20000
       max-lifetime: 1200000
+      keepalive-time: 60000        # Send keepalive every 60s to prevent DB timeout
+      validation-timeout: 5000     # Validate connection within 5s
+      leak-detection-threshold: 30000  # Log warning if connection not returned within 30s
 
   jpa:
     hibernate:
