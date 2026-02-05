@@ -65,6 +65,10 @@ app:
   auth-service:
     base-url: ${AUTH_SERVICE_URL:http://localhost:3000}
 
+  notification-service:
+    base-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8083}
+    api-key: ${NOTIFICATION_SERVICE_API_KEY:internal-service-key-change-in-production}
+
   internal:
     api-key: ${INTERNAL_API_KEY:default-api-key}
 

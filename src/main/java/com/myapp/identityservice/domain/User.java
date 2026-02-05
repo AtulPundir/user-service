@@ -137,7 +137,8 @@ public class User {
         }
         // Remove all non-digit characters except +
         String normalized = phone.replaceAll("[^0-9+]", "");
-        // Ensure + prefix
+
+        // Ensure + prefix for E.164 format
         if (!normalized.startsWith("+")) {
             normalized = "+" + normalized;
         }

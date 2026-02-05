@@ -35,6 +35,7 @@ public class ContextInvitationService {
     private final UserRepository userRepository;
     private final CuidGenerator cuidGenerator;
     private final EventPublisher eventPublisher;
+    private final com.myapp.identityservice.client.NotificationServiceClient notificationServiceClient;
 
     @Value("${app.invitation.expiry-days:30}")
     private int expiryDays;
@@ -42,11 +43,13 @@ public class ContextInvitationService {
     public ContextInvitationService(ContextInvitationRepository invitationRepository,
                                      UserRepository userRepository,
                                      CuidGenerator cuidGenerator,
-                                     EventPublisher eventPublisher) {
+                                     EventPublisher eventPublisher,
+                                     com.myapp.identityservice.client.NotificationServiceClient notificationServiceClient) {
         this.invitationRepository = invitationRepository;
         this.userRepository = userRepository;
         this.cuidGenerator = cuidGenerator;
         this.eventPublisher = eventPublisher;
+        this.notificationServiceClient = notificationServiceClient;
     }
 
     @Transactional
@@ -85,6 +88,9 @@ public class ContextInvitationService {
         logger.info("Created context invitation: id={}, contextType={}, contextId={}, target={}",
                 saved.getId(), saved.getContextType(), saved.getContextId(), saved.getTargetUserId());
 
+        // Send notification to invitee
+        sendInvitationCreatedNotification(saved, invitedByUserId, request.getTargetUserId());
+
         return ContextInvitationResponse.fromEntity(saved);
     }
 
@@ -119,6 +125,9 @@ public class ContextInvitationService {
 
         // Notify wow-service asynchronously
         notifyWowServiceOfAcceptance(saved, userId);
+
+        // Send notification to inviter that invitation was accepted
+        sendInvitationAcceptedNotification(saved, userId);
 
         return ContextInvitationResponse.fromEntity(saved);
     }
@@ -218,6 +227,71 @@ public class ContextInvitationService {
             );
         } catch (Exception e) {
             logger.warn("Failed to notify wow-service of invitation acceptance: id={}, error={}",
+                    invitation.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Send notification to invitee when invitation is created.
+     */
+    private void sendInvitationCreatedNotification(ContextInvitation invitation, String inviterId, String targetUserId) {
+        try {
+            // Get inviter details
+            User inviter = userRepository.findById(inviterId).orElse(null);
+            String inviterName = inviter != null ? inviter.getName() : "Someone";
+
+            // Get target user details
+            User targetUser = userRepository.findById(targetUserId).orElse(null);
+            if (targetUser == null) {
+                logger.warn("Cannot send invitation notification: target user not found: {}", targetUserId);
+                return;
+            }
+
+            String contextName = invitation.getAliasName(); // Context name often stored as alias
+            String message = invitation.getMessage();
+
+            notificationServiceClient.sendInvitationCreated(
+                    targetUser.getPhone(),
+                    targetUser.getEmail(),
+                    inviterName,
+                    invitation.getContextType().name(),
+                    contextName,
+                    message
+            );
+        } catch (Exception e) {
+            logger.warn("Failed to send invitation created notification: invitationId={}, error={}",
+                    invitation.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Send notification to inviter when invitation is accepted.
+     */
+    private void sendInvitationAcceptedNotification(ContextInvitation invitation, String acceptingUserId) {
+        try {
+            // Get inviter details
+            User inviter = userRepository.findById(invitation.getInvitedBy()).orElse(null);
+            if (inviter == null) {
+                logger.warn("Cannot send acceptance notification: inviter not found: {}", invitation.getInvitedBy());
+                return;
+            }
+
+            // Get accepting user details
+            User acceptingUser = userRepository.findById(acceptingUserId).orElse(null);
+            String inviteeName = acceptingUser != null ? acceptingUser.getName() : invitation.getAliasName();
+            if (inviteeName == null) inviteeName = "Someone";
+
+            String contextName = invitation.getAliasName();
+
+            notificationServiceClient.sendInvitationAccepted(
+                    inviter.getPhone(),
+                    inviter.getEmail(),
+                    inviteeName,
+                    invitation.getContextType().name(),
+                    contextName
+            );
+        } catch (Exception e) {
+            logger.warn("Failed to send invitation accepted notification: invitationId={}, error={}",
                     invitation.getId(), e.getMessage());
         }
     }

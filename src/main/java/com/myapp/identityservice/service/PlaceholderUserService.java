@@ -128,7 +128,7 @@ public class PlaceholderUserService {
                 user.setEmail(identityKey);
             }
 
-            User saved = userRepository.save(user);
+            User saved = userRepository.saveAndFlush(user);
             logger.info("Created user in user_db with auth-service ID: id={}, identityKey={}, isVerified={}",
                     saved.getId(), maskKey(identityKey), isVerified);
             return saved;

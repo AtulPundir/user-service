@@ -115,6 +115,8 @@ public class InternalUserController {
     private String normalizePhone(String phone) {
         if (phone == null) return null;
         String normalized = phone.replaceAll("[^0-9+]", "");
+
+        // Ensure + prefix for E.164 format
         if (!normalized.startsWith("+")) {
             normalized = "+" + normalized;
         }

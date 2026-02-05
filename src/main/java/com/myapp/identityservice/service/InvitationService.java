@@ -416,12 +416,13 @@ public class InvitationService {
 
     private String normalizePhone(String phone) {
         if (phone == null || phone.isBlank()) return null;
-        // Remove all non-digit characters except + at the start
+        // Remove all non-digit characters except +
         String cleaned = phone.replaceAll("[^\\d+]", "");
-        if (cleaned.startsWith("+")) {
-            return cleaned;
+
+        // Ensure + prefix for E.164 format
+        if (!cleaned.startsWith("+")) {
+            cleaned = "+" + cleaned;
         }
-        // If no country code, assume it's already in standard format
         return cleaned;
     }
 

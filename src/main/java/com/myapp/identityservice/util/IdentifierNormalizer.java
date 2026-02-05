@@ -27,9 +27,19 @@ public class IdentifierNormalizer {
     private String normalizePhone(String phone) {
         // Strip everything except digits and leading +
         String cleaned = phone.replaceAll("[^\\d+]", "");
-        if (cleaned.startsWith("+")) {
-            return cleaned;
+
+        // Phone must include country code (start with +)
+        if (!cleaned.startsWith("+")) {
+            throw new IllegalArgumentException(
+                "Phone number must include country code in E.164 format (e.g., +919876543210)");
         }
+
+        // Validate minimum length: + plus at least 9 digits
+        if (cleaned.length() < 10) {
+            throw new IllegalArgumentException(
+                "Phone number is too short. Must be in E.164 format with country code (e.g., +919876543210)");
+        }
+
         return cleaned;
     }
 }

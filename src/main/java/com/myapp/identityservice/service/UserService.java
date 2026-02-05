@@ -263,6 +263,8 @@ public class UserService {
             return null;
         }
         String normalized = phone.replaceAll("[^0-9+]", "");
+
+        // Ensure + prefix for E.164 format
         if (!normalized.startsWith("+")) {
             normalized = "+" + normalized;
         }
