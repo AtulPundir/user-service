@@ -1,6 +1,6 @@
-# User Service - Java 21 Spring Boot
+# Identity Service - Java 21 Spring Boot
 
-A production-ready user management microservice built with Java 21 and Spring Boot 3.x, migrated from the Node.js/TypeScript implementation.
+A production-ready identity and user management microservice built with Java 21 and Spring Boot 3.x, migrated from the Node.js/TypeScript implementation.
 
 ## Overview
 
@@ -36,7 +36,7 @@ This service provides:
 ## Project Structure
 
 ```
-src/main/java/com/myapp/userservice/
+src/main/java/com/myapp/identityservice/
 ├── controller/        # REST endpoints
 ├── service/           # Business logic
 ├── domain/            # JPA entities
@@ -63,7 +63,7 @@ src/main/java/com/myapp/userservice/
 
 1. **Clone and navigate to the project**
    ```bash
-   cd /Users/atulpundir/Projects/MYPROJECT/myAppJava/user-service
+   cd /Users/atulpundir/Projects/MYPROJECT/myAppJava/identity-service
    ```
 
 2. **Set up environment variables**
@@ -198,10 +198,10 @@ app:
 # Build executable JAR
 ./gradlew bootJar
 
-# The JAR will be at: build/libs/user-service.jar
+# The JAR will be at: build/libs/identity-service.jar
 
 # Run the JAR
-java -jar build/libs/user-service.jar
+java -jar build/libs/identity-service.jar
 ```
 
 ## Migration Notes

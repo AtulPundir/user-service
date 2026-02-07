@@ -1,4 +1,4 @@
-# User Service - Setup & Migration Guide
+# Identity Service - Setup & Migration Guide
 
 ## Prerequisites
 
@@ -86,7 +86,7 @@ SPRING_PROFILES_ACTIVE=development ./gradlew bootRun
 ./gradlew bootJar
 
 # Run JAR
-java -jar build/libs/user-service.jar
+java -jar build/libs/identity-service.jar
 ```
 
 ### Docker Mode
@@ -96,7 +96,7 @@ java -jar build/libs/user-service.jar
 docker-compose up -d
 
 # View logs
-docker-compose logs -f user-service
+docker-compose logs -f identity-service
 
 # Stop services
 docker-compose down
@@ -180,7 +180,7 @@ open build/reports/jacoco/test/html/index.html
 # In the Node.js service directory
 npm stop
 # or
-pm2 stop user-service
+pm2 stop identity-service
 ```
 
 ### Step 2: Start Java Service
@@ -226,7 +226,7 @@ If issues occur:
 # Stop Java
 docker-compose down
 # or
-pkill -f user-service.jar
+pkill -f identity-service.jar
 
 # Start Node.js (in Node.js directory)
 npm start
@@ -297,6 +297,6 @@ spring:
 ## Support
 
 For issues:
-1. Check logs: `docker-compose logs user-service`
+1. Check logs: `docker-compose logs identity-service`
 2. Enable debug logging: `SPRING_PROFILES_ACTIVE=development`
 3. Check health endpoint: `/health`
